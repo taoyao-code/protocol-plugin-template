@@ -7,7 +7,7 @@ import (
 	"tp-plugin/internal/config"
 	"tp-plugin/internal/platform"
 	"tp-plugin/internal/protocol"
-	"tp-plugin/internal/protocol/plugins/examples"
+	"tp-plugin/internal/protocol/plugins/bkv"
 
 	"github.com/sirupsen/logrus"
 )
@@ -120,9 +120,8 @@ func StartApp(configPath string) (*AppContext, error) {
 
 // initializeProtocol 初始化单协议处理器
 func initializeProtocol(app *AppContext, cfg *config.Config) error {
-	// 创建协议处理器（示例：使用传感器协议）
-	// TODO: 根据你的协议替换这里的实现
-	protocolHandler := examples.NewSensorProtocolHandler(cfg.Server.Port)
+	// 创建协议处理器（BKV 协议）
+	protocolHandler := bkv.NewHandler(cfg.Server.Port)
 
 	// 创建单协议处理器
 	singleHandler := protocol.NewSingleProtocolHandler(
