@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 	"time"
+
+	"tp-plugin/internal/protocol"
 )
 
 func TestParseFrameHeartbeat(t *testing.T) {
@@ -91,6 +93,61 @@ func TestAckEncoding(t *testing.T) {
 	plugField, ok := parsed.First(0x08)
 	if !ok || len(plugField.Value) != 1 || plugField.Value[0] != plug {
 		t.Fatalf("plug field mismatch: %v", plugField.Value)
+	}
+}
+
+func TestAckEncodingFromMapWithExtras(t *testing.T) {
+	h := NewHandler(0)
+	cmd := &protocol.Command{Action: "ack", Parameters: map[string]interface{}{
+		"cmd":        uint16(0x1001),
+		"request_id": "0000000000000005",
+		"device_mac": "0x610062900001",
+		"plug_num":   2,
+		"ack":        0,
+		"reply_time": "2024-08-26 20:14:37",
+		"extra_fields": map[string]interface{}{
+			"0x47": []byte{0x02},
+		},
+	}}
+
+	frame, err := h.EncodeCommand(cmd)
+	if err != nil {
+		t.Fatalf("EncodeCommand failed: %v", err)
+	}
+
+	parsed, err := ParseFrame(frame)
+	if err != nil {
+		t.Fatalf("ParseFrame: %v", err)
+	}
+	if parsed.IsUplink {
+		t.Fatalf("ack should be downlink")
+	}
+
+	ackField, ok := parsed.First(0x0f)
+	if !ok || ackField.Value[0] != 0x00 {
+		t.Fatalf("ack value mismatch: %v", ackField.Value)
+	}
+
+	plugField, ok := parsed.First(0x08)
+	if !ok || plugField.Value[0] != 0x02 {
+		t.Fatalf("plug field mismatch: %v", plugField.Value)
+	}
+
+	replyTimeField, ok := parsed.First(0x06)
+	if !ok {
+		t.Fatalf("missing reply time field")
+	}
+	ts, err := parseBCDDateTime(replyTimeField.Value)
+	if err != nil {
+		t.Fatalf("reply time parse failed: %v", err)
+	}
+	if ts.Format("2006-01-02 15:04:05") != "2024-08-26 20:14:37" {
+		t.Fatalf("reply time unexpected: %s", ts)
+	}
+
+	extra, ok := parsed.First(0x47)
+	if !ok || extra.Value[0] != 0x02 {
+		t.Fatalf("extra field parse failed: %v", extra.Value)
 	}
 }
 

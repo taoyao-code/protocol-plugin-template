@@ -3,6 +3,7 @@ package bkv
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -35,6 +36,8 @@ func parseBCDDateTime(data []byte) (time.Time, error) {
 
 func hexStringToBytes(str string) ([]byte, error) {
 	clean := strings.ReplaceAll(str, " ", "")
+	clean = strings.TrimPrefix(clean, "0x")
+	clean = strings.TrimPrefix(clean, "0X")
 	if len(clean)%2 != 0 {
 		clean = "0" + clean
 	}
@@ -86,4 +89,89 @@ func normalizeHex(value []byte) string {
 
 func parseStringInt(value []byte) (int, error) {
 	return strconv.Atoi(string(value))
+}
+
+// parseFlexibleTime 支持常见的时间字符串格式：RFC3339、"2006-01-02 15:04:05"、"20060102150405"。
+func parseFlexibleTime(str string) (time.Time, error) {
+	clean := strings.TrimSpace(str)
+	if t, err := time.Parse(time.RFC3339, clean); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("2006-01-02 15:04:05", clean); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse("20060102150405", clean); err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("无法解析时间格式: %s", str)
+}
+
+// normalizeExtraFields 接收 map 格式的额外字段并转换为标准 uint16->[]byte 的映射。
+// 支持的输入类型：
+// map[uint16][]byte、map[string][]byte、map[string]string、map[string]interface{}
+func normalizeExtraFields(raw interface{}) (map[uint16][]byte, error) {
+	result := make(map[uint16][]byte)
+	switch extras := raw.(type) {
+	case map[uint16][]byte:
+		for k, v := range extras {
+			result[k] = v
+		}
+	case map[string][]byte:
+		for k, v := range extras {
+			key, err := parseKeyString(k)
+			if err != nil {
+				return nil, err
+			}
+			result[key] = v
+		}
+	case map[string]string:
+		for k, v := range extras {
+			key, err := parseKeyString(k)
+			if err != nil {
+				return nil, err
+			}
+			bytes, err := hexStringToBytes(v)
+			if err != nil {
+				return nil, fmt.Errorf("extra_fields[%s]解析失败: %w", k, err)
+			}
+			result[key] = bytes
+		}
+	case map[string]interface{}:
+		for k, v := range extras {
+			key, err := parseKeyString(k)
+			if err != nil {
+				return nil, err
+			}
+			switch val := v.(type) {
+			case []byte:
+				result[key] = val
+			case string:
+				bytes, err := hexStringToBytes(val)
+				if err != nil {
+					return nil, fmt.Errorf("extra_fields[%s]解析失败: %w", k, err)
+				}
+				result[key] = bytes
+			case int:
+				result[key] = []byte{byte(val)}
+			case uint8:
+				result[key] = []byte{byte(val)}
+			default:
+				return nil, fmt.Errorf("extra_fields[%s]类型不支持", k)
+			}
+		}
+	default:
+		return nil, errors.New("extra_fields必须为map类型")
+	}
+	return result, nil
+}
+
+func parseKeyString(k string) (uint16, error) {
+	clean := strings.TrimSpace(k)
+	clean = strings.TrimPrefix(clean, "0x")
+	clean = strings.TrimPrefix(clean, "0X")
+	val, err := strconv.ParseUint(clean, 16, 16)
+	if err != nil {
+		return 0, fmt.Errorf("无法解析extra_fields key: %s", k)
+	}
+	return uint16(val), nil
 }

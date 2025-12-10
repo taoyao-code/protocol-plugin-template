@@ -56,8 +56,11 @@ func parseAckParams(v interface{}) (*AckParams, error) {
 	switch val := v.(type) {
 	case map[string]interface{}:
 		if cmdRaw, ok := val["cmd"]; ok {
-			if cmdUint, ok := cmdRaw.(uint16); ok {
-				params.Cmd = cmdUint
+			switch cmd := cmdRaw.(type) {
+			case uint16:
+				params.Cmd = cmd
+			case int:
+				params.Cmd = uint16(cmd)
 			}
 		}
 		if ridRaw, ok := val["request_id"]; ok {
@@ -100,6 +103,27 @@ func parseAckParams(v interface{}) (*AckParams, error) {
 				params.Ack = byte(ack)
 			case byte:
 				params.Ack = ack
+			}
+		}
+		if replyTimeRaw, ok := val["reply_time"]; ok {
+			switch rt := replyTimeRaw.(type) {
+			case time.Time:
+				params.ReplyTime = &rt
+			case string:
+				parsed, err := parseFlexibleTime(rt)
+				if err != nil {
+					return nil, fmt.Errorf("reply_time解析失败: %w", err)
+				}
+				params.ReplyTime = &parsed
+			}
+		}
+		if extrasRaw, ok := val["extra_fields"]; ok {
+			extras, err := normalizeExtraFields(extrasRaw)
+			if err != nil {
+				return nil, err
+			}
+			for k, v := range extras {
+				params.ExtraFields[k] = v
 			}
 		}
 	default:
