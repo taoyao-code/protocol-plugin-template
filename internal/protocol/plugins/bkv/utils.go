@@ -1,6 +1,7 @@
 package bkv
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -67,11 +68,16 @@ func encodeBCDFromTime(t time.Time) []byte {
 	return buf
 }
 
-func toUint16BE(b []byte) (uint16, bool) {
-	if len(b) < 2 {
+// toUintBE 支持2字节或4字节的大端数值解析，覆盖两轮与四轮充电桩的字段规格。
+func toUintBE(b []byte) (uint32, bool) {
+	switch len(b) {
+	case 2:
+		return uint32(binary.BigEndian.Uint16(b)), true
+	case 4:
+		return binary.BigEndian.Uint32(b), true
+	default:
 		return 0, false
 	}
-	return uint16(b[0])<<8 | uint16(b[1]), true
 }
 
 func normalizeHex(value []byte) string {

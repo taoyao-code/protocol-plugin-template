@@ -109,12 +109,12 @@ func (b *messageBuilder) appendChargeEnd() {
 		b.baseMsg.Data["finish_reason"] = int(reason.Value[0])
 	}
 	if electricCash, ok := b.frame.First(0x85); ok {
-		if val, ok := toUint16BE(electricCash.Value); ok {
+		if val, ok := toUintBE(electricCash.Value); ok {
 			b.baseMsg.Data["electric_cash_cent"] = val
 		}
 	}
 	if serviceCash, ok := b.frame.First(0x86); ok {
-		if val, ok := toUint16BE(serviceCash.Value); ok {
+		if val, ok := toUintBE(serviceCash.Value); ok {
 			b.baseMsg.Data["service_cash_cent"] = val
 		}
 	}
@@ -140,7 +140,7 @@ func (b *messageBuilder) appendNFCStart() {
 		}
 	}
 	if cash, ok := b.frame.First(0x18); ok {
-		if val, ok := toUint16BE(cash.Value); ok {
+		if val, ok := toUintBE(cash.Value); ok {
 			b.baseMsg.Data["nfc_cash_cent"] = val
 		}
 	}
@@ -188,7 +188,7 @@ func (b *messageBuilder) appendParamResponse() {
 	}
 	for key, name := range keys {
 		if f, ok := b.frame.First(key); ok {
-			if val, ok := toUint16BE(f.Value); ok {
+			if val, ok := toUintBE(f.Value); ok {
 				b.baseMsg.Data[name] = val
 			}
 		}
@@ -211,7 +211,7 @@ func (b *messageBuilder) appendEvent() {
 		b.baseMsg.Data["event_code"] = normalizeHex(event.Value)
 	}
 	if voltage, ok := b.frame.First(0x55); ok {
-		if val, ok := toUint16BE(voltage.Value); ok {
+		if val, ok := toUintBE(voltage.Value); ok {
 			b.baseMsg.Data["voltage_0_1v"] = val
 		}
 	}
@@ -247,7 +247,7 @@ func appendCommonCharge(msg *protocol.Message, frame *Frame) {
 			case "segment_minutes_hex":
 				msg.Data[name] = normalizeHex(f.Value)
 			default:
-				if val, ok := toUint16BE(f.Value); ok {
+				if val, ok := toUintBE(f.Value); ok {
 					msg.Data[name] = val
 				}
 			}
@@ -291,32 +291,32 @@ func parsePlug(data []byte) map[string]interface{} {
 		plug["status"] = int(f.Value[0])
 	}
 	if f, ok := idx[0x0a]; ok {
-		if val, ok := toUint16BE(f.Value); ok {
+		if val, ok := toUintBE(f.Value); ok {
 			plug["order"] = val
 		}
 	}
 	if f, ok := idx[0x0b]; ok {
-		if val, ok := toUint16BE(f.Value); ok {
+		if val, ok := toUintBE(f.Value); ok {
 			plug["power_0_1w"] = val
 		}
 	}
 	if f, ok := idx[0x0c]; ok {
-		if val, ok := toUint16BE(f.Value); ok {
+		if val, ok := toUintBE(f.Value); ok {
 			plug["current_ma"] = val
 		}
 	}
 	if f, ok := idx[0x0d]; ok {
-		if val, ok := toUint16BE(f.Value); ok {
+		if val, ok := toUintBE(f.Value); ok {
 			plug["electricity_wh"] = val
 		}
 	}
 	if f, ok := idx[0x0e]; ok {
-		if val, ok := toUint16BE(f.Value); ok {
+		if val, ok := toUintBE(f.Value); ok {
 			plug["charged_minutes"] = val
 		}
 	}
 	if f, ok := idx[0x55]; ok {
-		if val, ok := toUint16BE(f.Value); ok {
+		if val, ok := toUintBE(f.Value); ok {
 			plug["voltage_0_1v"] = val
 		}
 	}

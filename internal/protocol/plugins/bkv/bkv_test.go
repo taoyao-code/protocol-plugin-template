@@ -100,3 +100,58 @@ func TestChecksumValidation(t *testing.T) {
 		t.Fatalf("expected checksum error")
 	}
 }
+
+func TestParsePlugSupportsUint32Values(t *testing.T) {
+	plugPayload := []byte{
+		0x03, 0x01, 0x08, 0x00, // plug num
+		0x03, 0x01, 0x09, 0x80, // status
+		0x06, 0x01, 0x0b, 0x00, 0x0f, 0x42, 0x40, // power 0x000f4240
+		0x06, 0x01, 0x0c, 0x00, 0x00, 0x27, 0x10, // current 0x2710
+		0x06, 0x01, 0x0d, 0x00, 0x00, 0x00, 0x64, // electricity 0x64
+		0x04, 0x01, 0x0e, 0x03, 0xe8, // charged minutes 1000
+		0x04, 0x01, 0x55, 0x01, 0xf4, // voltage 500
+	}
+
+	fields := []Field{
+		newFieldUint16(0x01, 0x1002),
+		newFieldBytes(0x02, []byte{0, 0, 0, 0, 0, 0, 0, 0}),
+		newFieldBytes(0x03, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x01}),
+		{Key: 0x1c, Type: 0x03, Value: plugPayload},
+	}
+
+	frameBytes, err := buildFrame(false, fields)
+	if err != nil {
+		t.Fatalf("buildFrame: %v", err)
+	}
+
+	frame, err := ParseFrame(frameBytes)
+	if err != nil {
+		t.Fatalf("ParseFrame: %v", err)
+	}
+
+	builder, err := newMessageBuilder(frame)
+	if err != nil {
+		t.Fatalf("newMessageBuilder: %v", err)
+	}
+
+	msg, err := builder.build()
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	plugs, ok := msg.Data["plugs"].([]map[string]interface{})
+	if !ok || len(plugs) != 1 {
+		t.Fatalf("unexpected plugs parsed: %#v", msg.Data["plugs"])
+	}
+
+	plug := plugs[0]
+	if plug["power_0_1w"].(uint32) != 0x000f4240 {
+		t.Fatalf("power parse failed: %v", plug["power_0_1w"])
+	}
+	if plug["current_ma"].(uint32) != 0x2710 {
+		t.Fatalf("current parse failed: %v", plug["current_ma"])
+	}
+	if plug["electricity_wh"].(uint32) != 0x64 {
+		t.Fatalf("electricity parse failed: %v", plug["electricity_wh"])
+	}
+}
