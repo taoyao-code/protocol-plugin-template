@@ -73,9 +73,33 @@ func (b *messageBuilder) build() (*protocol.Message, error) {
 	case "0x100a":
 		b.baseMsg.MessageType = "nfc_end"
 		b.appendNFCEnd()
+	case "0x1005":
+		b.baseMsg.MessageType = "threshold_set_response"
+		b.appendThresholdConfig()
+	case "0x1006":
+		b.baseMsg.MessageType = "threshold_query_response"
+		b.appendThresholdConfig()
 	case "0x100c":
 		b.baseMsg.MessageType = "param_response"
 		b.appendParamResponse()
+	case "0x1008":
+		b.baseMsg.MessageType = "ota_response"
+		b.appendAckOnly()
+	case "0x100b":
+		b.baseMsg.MessageType = "system_param_set_response"
+		b.appendAckOnly()
+	case "0x100d":
+		b.baseMsg.MessageType = "reboot_response"
+		b.appendAckOnly()
+	case "0x1010":
+		b.baseMsg.MessageType = "nfc_balance_response"
+		b.appendNFCBalance()
+	case "0x1011":
+		b.baseMsg.MessageType = "quiet_time_response"
+		b.appendQuietTime()
+	case "0x1014":
+		b.baseMsg.MessageType = "qr_update_response"
+		b.appendAckOnly()
 	case "0x1013":
 		b.baseMsg.MessageType = "event"
 		b.appendEvent()
@@ -96,6 +120,16 @@ func (b *messageBuilder) appendHeartbeat() {
 func (b *messageBuilder) appendStatus() {
 	if temp, ok := b.frame.First(0x07); ok && len(temp.Value) > 0 {
 		b.baseMsg.Data["mcu_temp"] = int(temp.Value[0])
+	}
+	if coin, ok := b.frame.First(0x5d); ok {
+		if val, ok := toUintBE(coin.Value); ok {
+			b.baseMsg.Data["coin_count"] = val
+		}
+	}
+	if totalCoin, ok := b.frame.First(0x8a); ok {
+		if val, ok := toUintBE(totalCoin.Value); ok {
+			b.baseMsg.Data["coin_sum"] = val
+		}
 	}
 	plugs := extractPlugInfos(b.frame)
 	if len(plugs) > 0 {
@@ -198,6 +232,63 @@ func (b *messageBuilder) appendParamResponse() {
 	}
 }
 
+func (b *messageBuilder) appendThresholdConfig() {
+	if plug, ok := b.frame.First(0x08); ok && len(plug.Value) > 0 {
+		b.baseMsg.Data["plug_num"] = int(plug.Value[0])
+	}
+	fields := map[uint16]string{
+		0x10: "overcurrent_ma3",
+		0x11: "power_limit_0_1w",
+		0x14: "set_charge_time_min",
+		0x15: "set_charge_energy_wh",
+		0x12: "charge_mode",
+	}
+	for key, name := range fields {
+		if f, ok := b.frame.First(key); ok {
+			if val, ok := toUintBE(f.Value); ok {
+				b.baseMsg.Data[name] = val
+			}
+		}
+	}
+	if ack, ok := b.frame.First(0x0f); ok && len(ack.Value) > 0 {
+		b.baseMsg.Data["ack"] = int(ack.Value[0])
+	}
+}
+
+func (b *messageBuilder) appendAckOnly() {
+	if ack, ok := b.frame.First(0x0f); ok && len(ack.Value) > 0 {
+		b.baseMsg.Data["ack"] = int(ack.Value[0])
+	}
+}
+
+func (b *messageBuilder) appendNFCBalance() {
+	if card, ok := b.frame.First(0x16); ok {
+		b.baseMsg.Data["nfc_id"] = normalizeHex(card.Value)
+	}
+	if balance, ok := b.frame.First(0x18); ok {
+		if val, ok := toUintBE(balance.Value); ok {
+			b.baseMsg.Data["nfc_cash_cent"] = val
+		}
+	}
+	if plug, ok := b.frame.First(0x08); ok && len(plug.Value) > 0 {
+		b.baseMsg.Data["plug_num"] = int(plug.Value[0])
+	}
+	b.appendAckOnly()
+}
+
+func (b *messageBuilder) appendQuietTime() {
+	if switchField, ok := b.frame.First(0x50); ok && len(switchField.Value) > 0 {
+		b.baseMsg.Data["speech_switch"] = int(switchField.Value[0])
+	}
+	if numField, ok := b.frame.First(0x51); ok && len(numField.Value) > 0 {
+		b.baseMsg.Data["quiet_time_num"] = int(numField.Value[0])
+	}
+	if intervals, ok := b.frame.First(0x52); ok {
+		b.baseMsg.Data["quiet_time_hex"] = normalizeHex(intervals.Value)
+	}
+	b.appendAckOnly()
+}
+
 func (b *messageBuilder) appendEvent() {
 	if plug, ok := b.frame.First(0x08); ok && len(plug.Value) > 0 {
 		b.baseMsg.Data["plug_num"] = int(plug.Value[0])
@@ -234,6 +325,7 @@ func appendCommonCharge(msg *protocol.Message, frame *Frame) {
 		"used_cash":           0x30,
 		"settle_power_0_1w":   0x31,
 		"segment_minutes_hex": 0x32,
+		"order_id":            0xda,
 	}
 	for name, key := range fields {
 		if f, ok := frame.First(key); ok {
@@ -246,6 +338,8 @@ func appendCommonCharge(msg *protocol.Message, frame *Frame) {
 				}
 			case "segment_minutes_hex":
 				msg.Data[name] = normalizeHex(f.Value)
+			case "order_id":
+				msg.Data[name] = string(f.Value)
 			default:
 				if val, ok := toUintBE(f.Value); ok {
 					msg.Data[name] = val

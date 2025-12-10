@@ -155,3 +155,91 @@ func TestParsePlugSupportsUint32Values(t *testing.T) {
 		t.Fatalf("electricity parse failed: %v", plug["electricity_wh"])
 	}
 }
+
+func TestThresholdQueryParsing(t *testing.T) {
+	fields := []Field{
+		newFieldUint16(0x01, 0x1006),
+		newFieldBytes(0x02, []byte{0, 0, 0, 0, 0, 0, 0, 1}),
+		newFieldBytes(0x03, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x02}),
+		{Key: 0x08, Type: 0x01, Value: []byte{0x02}},
+		newFieldUint16(0x10, 0x1388),
+		newFieldUint16(0x11, 0x03e8),
+		newFieldUint16(0x14, 0x00c8),
+		newFieldUint16(0x15, 0x0100),
+	}
+
+	frameBytes, err := buildFrame(false, fields)
+	if err != nil {
+		t.Fatalf("buildFrame: %v", err)
+	}
+
+	frame, err := ParseFrame(frameBytes)
+	if err != nil {
+		t.Fatalf("ParseFrame: %v", err)
+	}
+
+	msg, err := newMessageBuilder(frame)
+	if err != nil {
+		t.Fatalf("newMessageBuilder: %v", err)
+	}
+
+	res, err := msg.build()
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	if res.MessageType != "threshold_query_response" {
+		t.Fatalf("unexpected message type: %s", res.MessageType)
+	}
+	if res.Data["plug_num"].(int) != 2 {
+		t.Fatalf("plug_num parse failed: %v", res.Data["plug_num"])
+	}
+	if res.Data["overcurrent_ma3"].(uint32) != 0x1388 {
+		t.Fatalf("overcurrent parse failed: %v", res.Data["overcurrent_ma3"])
+	}
+	if res.Data["power_limit_0_1w"].(uint32) != 0x03e8 {
+		t.Fatalf("power limit parse failed: %v", res.Data["power_limit_0_1w"])
+	}
+}
+
+func TestQuietTimeParsing(t *testing.T) {
+	fields := []Field{
+		newFieldUint16(0x01, 0x1011),
+		newFieldBytes(0x02, []byte{0, 0, 0, 0, 0, 0, 0, 2}),
+		newFieldBytes(0x03, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x03}),
+		{Key: 0x50, Type: 0x01, Value: []byte{0x01}},
+		{Key: 0x51, Type: 0x01, Value: []byte{0x02}},
+		{Key: 0x52, Type: 0x01, Value: []byte{0x07, 0x00, 0x0a, 0x00}},
+		{Key: 0x0f, Type: 0x01, Value: []byte{0x01}},
+	}
+
+	frameBytes, err := buildFrame(false, fields)
+	if err != nil {
+		t.Fatalf("buildFrame: %v", err)
+	}
+
+	frame, err := ParseFrame(frameBytes)
+	if err != nil {
+		t.Fatalf("ParseFrame: %v", err)
+	}
+
+	msg, err := newMessageBuilder(frame)
+	if err != nil {
+		t.Fatalf("newMessageBuilder: %v", err)
+	}
+
+	res, err := msg.build()
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	if res.MessageType != "quiet_time_response" {
+		t.Fatalf("message type mismatch: %s", res.MessageType)
+	}
+	if res.Data["ack"].(int) != 1 {
+		t.Fatalf("ack parse failed: %v", res.Data["ack"])
+	}
+	if res.Data["quiet_time_hex"].(string) != "07000A00" {
+		t.Fatalf("quiet intervals parse failed: %v", res.Data["quiet_time_hex"])
+	}
+}
