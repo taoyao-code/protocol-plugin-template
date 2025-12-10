@@ -142,17 +142,32 @@ func (b *messageBuilder) appendStatus() {
 
 func (b *messageBuilder) appendChargeEnd() {
 	appendCommonCharge(b.baseMsg, b.frame)
-	if reason, ok := b.frame.First(0x2f); ok && len(reason.Value) > 0 {
-		b.baseMsg.Data["finish_reason"] = int(reason.Value[0])
+	if reason, ok := pickupFinishReason(b.frame); ok {
+		b.baseMsg.Data["finish_reason"] = reason
 	}
 	if electricCash, ok := b.frame.First(0x85); ok {
 		if val, ok := toUintBE(electricCash.Value); ok {
 			b.baseMsg.Data["electric_cash_cent"] = val
 		}
 	}
+	if electricCashHA, ok := firstAny(b.frame, 0x0193, 0x93); ok {
+		if val, ok := toUintBE(electricCashHA.Value); ok {
+			b.baseMsg.Data["electric_cash_micro"] = val
+		}
+	}
 	if serviceCash, ok := b.frame.First(0x86); ok {
 		if val, ok := toUintBE(serviceCash.Value); ok {
 			b.baseMsg.Data["service_cash_cent"] = val
+		}
+	}
+	if serviceCashHA, ok := firstAny(b.frame, 0x0194, 0x94); ok {
+		if val, ok := toUintBE(serviceCashHA.Value); ok {
+			b.baseMsg.Data["service_cash_micro"] = val
+		}
+	}
+	if serviceUsedCash, ok := b.frame.First(0x87); ok {
+		if val, ok := toUintBE(serviceUsedCash.Value); ok {
+			b.baseMsg.Data["service_cash_used_cent"] = val
 		}
 	}
 	if segments, ok := b.frame.First(0x84); ok {
@@ -203,8 +218,8 @@ func (b *messageBuilder) appendNFCEnd() {
 	if mode, ok := b.frame.First(0x27); ok && len(mode.Value) > 0 {
 		b.baseMsg.Data["card_mode"] = int(mode.Value[0])
 	}
-	if reason, ok := b.frame.First(0x2f); ok && len(reason.Value) > 0 {
-		b.baseMsg.Data["finish_reason"] = int(reason.Value[0])
+	if reason, ok := pickupFinishReason(b.frame); ok {
+		b.baseMsg.Data["finish_reason"] = reason
 	}
 }
 
@@ -331,19 +346,21 @@ func (b *messageBuilder) appendEvent() {
 
 func appendCommonCharge(msg *protocol.Message, frame *Frame) {
 	fields := map[string]uint16{
-		"plug_num":            0x08,
-		"plug_status":         0x09,
-		"order":               0x0a,
-		"power_0_1w":          0x0b,
-		"current_ma":          0x0c,
-		"electricity_wh":      0x0d,
-		"charged_minutes":     0x0e,
-		"charge_mode":         0x12,
-		"finish_time_bcd":     0x2e,
-		"used_cash":           0x30,
-		"settle_power_0_1w":   0x31,
-		"segment_minutes_hex": 0x32,
-		"order_id":            0xda,
+		"plug_num":               0x08,
+		"plug_status":            0x09,
+		"order":                  0x0a,
+		"power_0_1w":             0x0b,
+		"current_ma":             0x0c,
+		"electricity_wh":         0x0d,
+		"charged_minutes":        0x0e,
+		"charge_mode":            0x12,
+		"finish_time_bcd":        0x2e,
+		"used_cash":              0x30,
+		"settle_power_0_1w":      0x31,
+		"segment_minutes_hex":    0x32,
+		"order_id":               0xda,
+		"service_cash_used_cent": 0x87,
+		"service_charge_num":     0x89,
 	}
 	for name, key := range fields {
 		if f, ok := frame.First(key); ok {
@@ -437,6 +454,25 @@ func parsePlug(data []byte) map[string]interface{} {
 	}
 
 	return plug
+}
+
+func pickupFinishReason(frame *Frame) (int, bool) {
+	if reason, ok := frame.First(0x2f); ok && len(reason.Value) > 0 {
+		return int(reason.Value[0]), true
+	}
+	if reason, ok := frame.First(0x78); ok && len(reason.Value) > 0 {
+		return int(reason.Value[0]), true
+	}
+	return 0, false
+}
+
+func firstAny(frame *Frame, keys ...uint16) (Field, bool) {
+	for _, key := range keys {
+		if f, ok := frame.First(key); ok {
+			return f, true
+		}
+	}
+	return Field{}, false
 }
 
 const timeLayout = "2006-01-02 15:04:05"

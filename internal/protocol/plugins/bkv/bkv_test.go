@@ -291,3 +291,68 @@ func TestControlResponseParsing(t *testing.T) {
 		t.Fatalf("error code parse failed: %v", res.Data["control_error_code"])
 	}
 }
+
+func TestChargeEndNewMoneyAndReason(t *testing.T) {
+	fields := []Field{
+		newFieldUint16(0x01, 0x1004),
+		newFieldBytes(0x02, []byte{0, 0, 0, 0, 0, 0, 0, 4}),
+		newFieldBytes(0x03, []byte{0x61, 0x00, 0x62, 0x90, 0x00, 0x01}),
+		{Key: 0x07, Type: 0x01, Value: []byte{0x20}},
+		{Key: 0x08, Type: 0x01, Value: []byte{0x00}},
+		{Key: 0x09, Type: 0x01, Value: []byte{0x98}},
+		{Key: 0x0a, Type: 0x01, Value: []byte{0x00, 0x2e}},
+		{Key: 0x0b, Type: 0x01, Value: []byte{0x00, 0x00}},
+		{Key: 0x0c, Type: 0x01, Value: []byte{0x00, 0x03}},
+		{Key: 0x0d, Type: 0x01, Value: []byte{0x00, 0x00}},
+		{Key: 0x0e, Type: 0x01, Value: []byte{0x00, 0x01}},
+		{Key: 0x12, Type: 0x01, Value: []byte{0x04}},
+		newFieldBytes(0x2e, encodeBCDFromTime(time.Date(2024, 8, 27, 14, 37, 19, 0, time.Local))),
+		{Key: 0x78, Type: 0x01, Value: []byte{0x08}},
+		newFieldUint16(0x85, 0x0000),
+		newFieldUint16(0x86, 0x0000),
+		newFieldUint16(0x87, 0x03e8),
+		newFieldUint16(0x89, 0x01),
+		{Key: 0x0193, Type: 0x01, Value: []byte{0x00, 0x00, 0x10, 0x00}},
+		{Key: 0x0194, Type: 0x01, Value: []byte{0x00, 0x00, 0x20, 0x00}},
+		{Key: 0x84, Type: 0x01, Value: []byte{0x00, 0x01, 0x00, 0x00, 0x00, 0x00}},
+	}
+
+	frameBytes, err := buildFrame(false, fields)
+	if err != nil {
+		t.Fatalf("buildFrame: %v", err)
+	}
+
+	frame, err := ParseFrame(frameBytes)
+	if err != nil {
+		t.Fatalf("ParseFrame: %v", err)
+	}
+
+	msgBuilder, err := newMessageBuilder(frame)
+	if err != nil {
+		t.Fatalf("newMessageBuilder: %v", err)
+	}
+
+	msg, err := msgBuilder.build()
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	if msg.Data["finish_reason"].(int) != 0x08 {
+		t.Fatalf("finish reason parse failed: %v", msg.Data["finish_reason"])
+	}
+	if msg.Data["service_cash_used_cent"].(uint32) != 0x03e8 {
+		t.Fatalf("service cash used parse failed: %v", msg.Data["service_cash_used_cent"])
+	}
+	if msg.Data["service_charge_num"].(uint32) != 0x01 {
+		t.Fatalf("service charge num parse failed: %v", msg.Data["service_charge_num"])
+	}
+	if msg.Data["electric_cash_micro"].(uint32) != 0x00001000 {
+		t.Fatalf("electric cash micro parse failed: %v", msg.Data["electric_cash_micro"])
+	}
+	if msg.Data["service_cash_micro"].(uint32) != 0x00002000 {
+		t.Fatalf("service cash micro parse failed: %v", msg.Data["service_cash_micro"])
+	}
+	if msg.Data["service_segments_hex"].(string) != "000100000000" {
+		t.Fatalf("service segments parse failed: %v", msg.Data["service_segments_hex"])
+	}
+}
