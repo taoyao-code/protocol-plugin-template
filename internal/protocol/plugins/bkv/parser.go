@@ -85,6 +85,9 @@ func (b *messageBuilder) build() (*protocol.Message, error) {
 	case "0x1008":
 		b.baseMsg.MessageType = "ota_response"
 		b.appendAckOnly()
+	case "0x1007":
+		b.baseMsg.MessageType = "control_response"
+		b.appendControlResponse()
 	case "0x100b":
 		b.baseMsg.MessageType = "system_param_set_response"
 		b.appendAckOnly()
@@ -259,6 +262,21 @@ func (b *messageBuilder) appendAckOnly() {
 	if ack, ok := b.frame.First(0x0f); ok && len(ack.Value) > 0 {
 		b.baseMsg.Data["ack"] = int(ack.Value[0])
 	}
+}
+
+func (b *messageBuilder) appendControlResponse() {
+	if plug, ok := b.frame.First(0x08); ok && len(plug.Value) > 0 {
+		b.baseMsg.Data["plug_num"] = int(plug.Value[0])
+	}
+	if order, ok := b.frame.First(0x0a); ok {
+		if val, ok := toUintBE(order.Value); ok {
+			b.baseMsg.Data["order"] = val
+		}
+	}
+	if code, ok := b.frame.First(0x97); ok && len(code.Value) > 0 {
+		b.baseMsg.Data["control_error_code"] = int(code.Value[0])
+	}
+	b.appendAckOnly()
 }
 
 func (b *messageBuilder) appendNFCBalance() {

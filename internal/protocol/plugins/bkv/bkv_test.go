@@ -243,3 +243,51 @@ func TestQuietTimeParsing(t *testing.T) {
 		t.Fatalf("quiet intervals parse failed: %v", res.Data["quiet_time_hex"])
 	}
 }
+
+func TestControlResponseParsing(t *testing.T) {
+	fields := []Field{
+		newFieldUint16(0x01, 0x1007),
+		newFieldBytes(0x02, []byte{0, 0, 0, 0, 0, 0, 0, 3}),
+		newFieldBytes(0x03, []byte{0x61, 0x00, 0x62, 0x90, 0x00, 0x01}),
+		{Key: 0x0f, Type: 0x01, Value: []byte{0x01}},
+		{Key: 0x08, Type: 0x01, Value: []byte{0x03}},
+		{Key: 0x0a, Type: 0x01, Value: []byte{0x00, 0x56}},
+		{Key: 0x97, Type: 0x01, Value: []byte{0x02}},
+	}
+
+	frameBytes, err := buildFrame(false, fields)
+	if err != nil {
+		t.Fatalf("buildFrame: %v", err)
+	}
+
+	frame, err := ParseFrame(frameBytes)
+	if err != nil {
+		t.Fatalf("ParseFrame: %v", err)
+	}
+
+	msg, err := newMessageBuilder(frame)
+	if err != nil {
+		t.Fatalf("newMessageBuilder: %v", err)
+	}
+
+	res, err := msg.build()
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+
+	if res.MessageType != "control_response" {
+		t.Fatalf("message type mismatch: %s", res.MessageType)
+	}
+	if res.Data["ack"].(int) != 1 {
+		t.Fatalf("ack parse failed: %v", res.Data["ack"])
+	}
+	if res.Data["plug_num"].(int) != 3 {
+		t.Fatalf("plug num parse failed: %v", res.Data["plug_num"])
+	}
+	if res.Data["order"].(uint32) != 0x56 {
+		t.Fatalf("order parse failed: %v", res.Data["order"])
+	}
+	if res.Data["control_error_code"].(int) != 2 {
+		t.Fatalf("error code parse failed: %v", res.Data["control_error_code"])
+	}
+}
