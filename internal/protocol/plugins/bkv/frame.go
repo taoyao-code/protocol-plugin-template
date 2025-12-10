@@ -43,9 +43,9 @@ func ParseFrame(data []byte) (*Frame, error) {
 	}
 
 	declaredLen := int(binary.BigEndian.Uint16(data[2:4]))
-	totalLen := declaredLen + 2 // 帧长字段不包含帧头2字节
-	if totalLen != len(data) {
-		return nil, fmt.Errorf("帧长不匹配，声明:%d 实际:%d", declaredLen, len(data)-2)
+	actualLen := len(data) - 4 // 长度不含帧头与帧尾
+	if declaredLen != actualLen {
+		return nil, fmt.Errorf("帧长不匹配，声明:%d 实际:%d", declaredLen, actualLen)
 	}
 
 	// payload范围: [4, len-3)，之后1字节校验和 + 2字节帧尾
